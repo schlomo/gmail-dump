@@ -1,3 +1,5 @@
+import sys
+
 import base64
 
 import httplib2
@@ -72,8 +74,8 @@ def main():
     # example: {'historyId': '380957', 'emailAddress': 'user@domain', 'threadsTotal': 1135, 'messagesTotal': 1950}
     print("Downloading {messagesTotal} messages for {emailAddress}".format(**profile))
 
-    box = mailbox.Maildir('mail', create=True)
-    box.lock()
+    for new_dir in ['tmp','new','cur']:
+        os.makedirs("mail/%s" % new_dir, mode=0o700, exist_ok=True)
 
     def process_message(request_id, response, exception):
         if exception is not None:
@@ -83,7 +85,8 @@ def main():
             mime_msg = email.message_from_bytes(msg_bytes)
             maildir_message = mailbox.MaildirMessage(mime_msg)
             #box.add(maildir_message)
-            with open("mail/cur/%s" % response['id'], "wb") as message_file:
+            message_id = response['id']
+            with open("mail/cur/%s" % message_id, "wb") as message_file:
                 message_file.write(maildir_message.__bytes__())
 
     try:
@@ -98,17 +101,26 @@ def main():
             response = service.users().messages().list(userId='me', pageToken=page_token).execute()
             if 'messages' in response:
                 message_count += len(response['messages'])
+                existing_message_count = 0
                 batch = BatchHttpRequest(callback=process_message)
                 for message in response['messages']:
-                    batch.add(service.users().messages().get(userId='me', format='raw', id=message['id']))
+                    message_id = message['id']
+                    if os.path.exists('mail/cur/%s' % message_id):
+                        existing_message_count+=1
+                    else:
+                        batch.add(service.users().messages().get(userId='me', format='raw', id=message_id))
                 batch.execute()
-                print("Downloaded %s messages" % message_count)
+                info = "Downloaded %s messages" % message_count
+                if existing_message_count:
+                    info += " (skipping %s messages already downloaded)" % existing_message_count
+                print(info)
+
     except errors.HttpError as error:
         print('An HTTPError occurred: %s' % error)
 
-    box.unlock()
-    box.close()
-
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(10)
