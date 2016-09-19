@@ -16,6 +16,8 @@ On first run your browser should open up and ask for your Google Authorization. 
 
 You can use [mutt](http://www.mutt.org/) like `mutt -f mail` to browse through the downloaded email.
 
+On successive runs the script will only download new messages. Ideal for running as a nightly cron job.
+
 ## Caveats
 
 * I use the message ID as file name for the mail files, it seems to work so far. Please report if you have a problem with that.
